@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>두더지 잡기</title>
+
+<style>
+body {
+    text-align: center;
+    font-family: Arial;
+}
+
+canvas {
+    border: 2px solid black;
+}
+</style>
+
+</head>
+<body>
+
+<h1>두더지 잡기</h1>
+
+<p>
+점수 :
+<span id="score">0</span>
+|
+남은 시간 :
+<span id="time">30</span>초
+|
+콤보 :
+<span id="combo">0</span>
+</p>
+
+<button onclick="startGame()">게임 시작</button> 
+
+<canvas id="gameCanvas"
+        width="600"
+        height="400">
+</canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreText = document.getElementById("score");
+    const timeText = document.getElementById("time");
+    const comboText = document.getElementById("combo");
+
+    let moleX = 300;
+    let moleY = 200;
+    let moleRadius = 30;
+
+    let score = 0;
+
+    let timeLeft = 30;
+    let gameRunning = false;
+    let moleSpeed = 1000;
+    let timerId;
+    let moleMoveId;
+
+
+    // =========================
+    // 추가된 변수
+    // =========================
+
+    // 콤보
+    let combo = 0;
+
+    // 황금 두더지인지 확인
+    let goldenMole = false;
+
+
+    // 게임 시작
+    function startGame() {
+        score = 0;
+        timeLeft = 30;
+        gameRunning = true;
+
+        // 콤보 초기화
+        combo = 0;
+
+        scoreText.textContent = score;
+        timeText.textContent = timeLeft;
+        comboText.textContent = combo;
+
+        // 기존 타이머 제거
+        clearInterval(timerId);
+        clearInterval(moleMoveId);
+
+        // 두더지 바로 이동
+        moveMole();
+
+        // 시간 감소
+        timerId = setInterval(() => {
+            timeLeft--;
+            timeText.textContent = timeLeft;
+
+            if (timeLeft <= 0) {    
+                endGame();
+            }
+        }, 1000);
+
+        // 두더지 이동
+        moleMoveId = setInterval(moveMole, moleSpeed);
+    }
+
+
+    function endGame(){
+        gameRunning = false;
+
+        clearInterval(timerId);
+        clearInterval(moleMoveId);
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        ctx.font = '32px Arial';
+        ctx.fillStyle = "black";
+        ctx.textAlign = "center";
+
+        ctx.fillText("게임 종료!", canvas.width / 2, 150);
+        ctx.fillText("최종 점수: " + score, canvas.width / 2, 200);
+
+        // =========================
+        // 등급 계산
+        // =========================
+
+        let grade;
+
+        if (score >= 30) {
+            grade = "S";
+        }
+        else if (score >= 20) {
+            grade = "A";
+        }
+        else if (score >= 15) {
+            grade = "B";
+        }
+        else if (score >= 10) {
+            grade = "C";
+        }
+        else {
+            grade = "D";
+        }
+
+        ctx.fillText("등급: " + grade, canvas.width / 2, 250);
+    }
+
+
+    // 두더지 그리기
+    function drawMole() {
+
+        ctx.clearRect(
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
+        ctx.beginPath();
+
+        ctx.arc(
+            moleX,
+            moleY,
+            moleRadius,
+            0,
+            Math.PI * 2
+        );
+
+
+        // =========================
+        // 황금 두더지 색상
+        // =========================
+
+        if (goldenMole) {
+            ctx.fillStyle = "gold";
+        }
+        else {
+            ctx.fillStyle = "brown";
+        }
+
+        ctx.fill();
+
+
+        // 황금 두더지 표시
+        if (goldenMole) {
+
+            ctx.font = "20px Arial";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+
+            ctx.fillText(
+                "★",
+                moleX,
+                moleY + 7
+            );
+        }
+    }
+
+
+    // 두더지 이동
+    function moveMole() {
+
+        moleX =
+            Math.random() *
+            (canvas.width - 80) + 40;
+
+        moleY =
+            Math.random() *
+            (canvas.height - 80) + 40;
+
+
+        // =========================
+        // 황금 두더지 확률
+        // =========================
+
+        // 20% 확률로 황금 두더지
+        if (Math.random() < 0.2) {
+            goldenMole = true;
+        }
+        else {
+            goldenMole = false;
+        }
+
+        drawMole();
+    }
+
+
+    // 캔버스 클릭
+    canvas.addEventListener("click", function(event) {
+
+        // 게임 중이 아니면 클릭 무시
+        if (!gameRunning) {
+            return;
+        }
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        const mouseX =
+            event.clientX - rect.left;
+
+        const mouseY =
+            event.clientY - rect.top;
+
+
+        // 마우스와 두더지 사이의 거리
+        const dx = mouseX - moleX;
+        const dy = mouseY - moleY;
+
+        const distance =
+            Math.sqrt(dx * dx + dy * dy);
+
+
+        // 두더지를 맞췄다면
+        if (distance <= moleRadius) {
+
+            // =========================
+            // 콤보 증가
+            // =========================
+
+            combo++;
+
+            comboText.textContent = combo;
+
+
+            // =========================
+            // 황금 두더지
+            // =========================
+
+            if (goldenMole) {
+
+                // 황금 두더지는 3점
+                score += 3;
+
+            }
+            else {
+
+                // 일반 두더지는 1점
+                score++;
+
+            }
+
+
+            // =========================
+            // 콤보 보너스
+            // =========================
+
+            // 5콤보마다 추가 1점
+            if (combo % 5 === 0) {
+                score++;
+            }
+
+
+            scoreText.textContent = score;
+
+            moveMole();
+        }
+
+        // =========================
+        // 빗나갔을 경우
+        // =========================
+
+        else {
+
+            combo = 0;
+
+            comboText.textContent = combo;
+        }
+
+    });
+
+</script>
+
+</body>
+</html>
