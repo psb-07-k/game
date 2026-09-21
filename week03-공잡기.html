@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>공 잡기 게임 (하드모드 & 폭탄 추가)</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #fafafa;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>공 잡기 게임</h1>
+
+    <p>
+        점수 : <span id="score">0</span> |
+        남은 시간 : <span id="time">30</span>초 |
+        속도 : <span id="speed">1</span> 단계
+    </p>
+    <button onclick="startGame()">게임 시작</button>
+
+    <canvas id="gameCanvas" width="600" height="400">
+    </canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const scoreText = document.getElementById("score");
+        let score = 0;
+
+        const speedText = document.getElementById("speed");
+        let speedLevel = 1;
+
+        const timeText = document.getElementById("time");
+        let timeLeft = 30;
+
+        let gameRunning = false;
+        let timerId;
+        let animId;
+
+        // 타겟 공 (점수를 얻는 빨간 공)
+        const ball = { x: 300, y: 200, radius: 25, dx: 3, dy: 2, color: "tomato" };
+
+        // 꽝 폭탄 공 (클릭하면 벌어지는 검은 공)
+        const bomb = { x: 100, y: 100, radius: 20, dx: -4, dy: 3, color: "black" };
+
+        function startGame() {
+            if (animId) {
+                cancelAnimationFrame(animId);
+            }
+
+            score = 0;
+            timeLeft = 30;
+            speedLevel = 1;
+            scoreText.textContent = score;
+            speedText.textContent = speedLevel;
+            timeText.textContent = timeLeft;
+
+            // 공 초기화 (하드모드 대비 초기 크기 복구)
+            ball.x = 300;
+            ball.y = 200;
+            ball.radius = 25;
+            ball.dx = 3;
+            ball.dy = 2;
+
+            bomb.x = 100;
+            bomb.y = 100;
+            bomb.dx = -4;
+            bomb.dy = 3;
+
+            gameRunning = true;
+
+            clearInterval(timerId);
+            timerId = setInterval(() => {
+                timeLeft--;
+                timeText.textContent = timeLeft;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+
+            drawGame();
+        }
+
+        function endGame() {
+            gameRunning = false;
+            clearInterval(timerId);
+
+            if (animId) {
+                cancelAnimationFrame(animId);
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "32px Arial";
+            ctx.fillStyle = "black";
+            ctx.textAlign = "center";
+            ctx.fillText("게임 종료!", canvas.width / 2, canvas.height / 2 - 30);
+            ctx.fillText("최종 점수 : " + score, canvas.width / 2, canvas.height / 2 + 20);
+        }
+
+        // [수정 완료] function 키워드를 추가했습니다!
+        function funcDrawCircle(obj) {
+            ctx.beginPath();
+            ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+            ctx.fillStyle = obj.color;
+            ctx.fill();
+        }
+
+        // 공 움직임 및 벽 충돌 처리 함수
+        function updateObject(obj) {
+            obj.x += obj.dx;
+            obj.y += obj.dy;
+
+            if (obj.x + obj.radius > canvas.width || obj.x - obj.radius < 0) { obj.dx = -obj.dx; }
+            if (obj.y + obj.radius > canvas.height || obj.y - obj.radius < 0) { obj.dy = -obj.dy; }
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 빨간 공 그리기 및 업데이트
+            funcDrawCircle(ball);
+            updateObject(ball);
+
+            // 폭탄 공 그리기 및 업데이트 (게임 시작 상태일 때만)
+            if (gameRunning) {
+                funcDrawCircle(bomb);
+                updateObject(bomb);
+            }
+
+            animId = requestAnimationFrame(drawGame);
+        }
+
+        // 캔버스 클릭 이벤트
+        canvas.addEventListener("click", function (event) {
+            if (!gameRunning) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            // 1. 꽝 폭탄 공을 클릭했는지 확인
+            const bombDx = mouseX - bomb.x;
+            const bombDy = mouseY - bomb.y;
+            const bombDist = Math.sqrt(bombDx * bombDx + bombDy * bombDy);
+
+            if (bombDist <= bomb.radius) {
+                score = Math.max(0, score - 2);
+                scoreText.textContent = score;
+                moveBallRandom(bomb);
+                return;
+            }
+
+            // 2. 정상적인 타겟 공을 클릭했는지 확인
+            const dx = mouseX - ball.x;
+            const dy = mouseY - ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= ball.radius) {
+                score++;
+                scoreText.textContent = score;
+                speedLevel++;
+                speedText.textContent = speedLevel;
+
+                // [하드모드] 맞출 때마다 공 크기가 작아짐 (최소 10px까지)
+                if (ball.radius > 10) {
+                    ball.radius -= 1;
+                }
+
+                // 속도 증가
+                ball.dx += (ball.dx > 0) ? 0.5 : -0.5;
+                ball.dy += (ball.dy > 0) ? 0.5 : -0.5;
+
+                moveBallRandom(ball);
+            }
+        });
+
+        function moveBallRandom(obj) {
+            obj.x = Math.random() * (canvas.width - obj.radius * 2) + obj.radius;
+            obj.y = Math.random() * (canvas.height - obj.radius * 2) + obj.radius;
+        }
+    </script>
+</body>
+
+</html>
