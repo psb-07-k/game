@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>예제 1: 무지개 과녁</title>
+</head>
+
+<body>
+    <canvas id="myCanvas" width="400" height="400" style="background: #222;"></canvas>
+<script>
+    const canvas = document.getElementById("myCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const ball = { x: 200, y: 200, dx: 3, dy: 2};
+    
+    function drawBall() {
+        // 1. 토마토 색 (반지름 120)
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, 120, 0, Math.PI * 2);
+        ctx.fillStyle = "tomato";
+        ctx.fill();
+
+        // 2. 주황 색 (반지름 95)
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, 95, 0, Math.PI * 2);
+        ctx.fillStyle = "orange";
+        ctx.fill();
+
+        // 3. 노랑 색 (반지름 70)
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, 70, 0, Math.PI * 2);
+        ctx.fillStyle = "gold";
+        ctx.fill();
+
+        // 4. 초록 색 (반지름 45)
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, 45, 0, Math.PI * 2);
+        ctx.fillStyle = "limegreen";
+        ctx.fill();
+
+        // 5. 파랑 색 (반지름 20)
+        ctx.beginPath();
+        ctx.arc(ball.x, ball.y, 20, 0, Math.PI * 2);
+        ctx.fillStyle = "dodgerblue";
+        ctx.fill();
+    }
+    
+    drawBall(); 
+
+</script>
+</body>
+
+</html>
