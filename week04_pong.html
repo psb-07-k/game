@@ -66,7 +66,7 @@
         }
         //drawBall();
 
-        function moveBall() {
+                function moveBall() {
             ball.x += ball.dx;
             ball.y += ball.dy;
 
@@ -96,6 +96,8 @@
 
                 ball.dx = currentSpeed * Math.cos(angle);
                 ball.dy = currentSpeed * Math.sin(angle);
+
+                ball.x = leftPaddle.x + leftPaddle.width + ball.radius;
             }
 
             if (isBallHitPaddle(rightPaddle)) {
@@ -107,9 +109,10 @@
 
                 ball.dx = -currentSpeed * Math.cos(angle);
                 ball.dy = currentSpeed * Math.sin(angle);
+
+                ball.x = rightPaddle.x - ball.radius;
             }
         }
-
         const keys = {};
 
         document.addEventListener("keydown", function (event) {
