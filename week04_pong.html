@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Pong 게임</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+            background: #f5f5f5;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #111;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Pong 게임</h1>
+    <p>왼쪽 플레이어: W / S | 오른쪽 플레이어: ↑ / ↓</p>
+    <p>왼쪽 점수: <span id="leftScore">0</span> | 오른쪽 점수: <span id="rightScore">0</span></p>
+
+    <canvas id="gameCanvas" width="700" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const leftScoreText = document.getElementById("leftScore");
+        const rightScoreText = document.getElementById("rightScore");
+
+        let leftScore = 0;
+        let rightScore = 0;
+
+        function drawCenterLine() {
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = "white"; // 오타 수정 완료 (strokeStyle, "white")
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+        drawCenterLine();
+
+
+        //이거 공 위치 코드 시험 나올 수도?있음 위치 계산해서 하는걸로
+        const ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 10,
+            dx: 5,
+            dy: 3
+        };
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = "white";
+            ctx.fill();
+        }
+        //drawBall();
+
+        function moveBall() {
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
+                ball.dy *= -1;
+            }
+
+            if (ball.x - ball.radius < 0) {
+                rightScore++;
+                rightScoreText.textContent = rightScore;
+                resetBall();
+            }
+
+            if (ball.x + ball.radius > canvas.width) {
+                leftScore++;
+                leftScoreText.textContent = leftScore;
+                resetBall();
+            }
+
+            if (isBallHitPaddle(leftPaddle)) {
+                let collidePoint = ball.y - (leftPaddle.y + leftPaddle.height / 2);
+                collidePoint = collidePoint / (leftPaddle.height / 2);
+
+                let currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy) * 1.05;
+
+                let angle = collidePoint * (Math.PI / 3);
+
+                ball.dx = currentSpeed * Math.cos(angle);
+                ball.dy = currentSpeed * Math.sin(angle);
+            }
+
+            if (isBallHitPaddle(rightPaddle)) {
+                let collidePoint = ball.y - (rightPaddle.y + rightPaddle.height / 2);
+                collidePoint = collidePoint / (rightPaddle.height / 2);
+
+                let currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy) * 1.05;
+                let angle = collidePoint * (Math.PI / 3);
+
+                ball.dx = -currentSpeed * Math.cos(angle);
+                ball.dy = currentSpeed * Math.sin(angle);
+            }
+        }
+
+        const keys = {};
+
+        document.addEventListener("keydown", function (event) {
+            keys[event.key] = true;
+        });
+
+        document.addEventListener("keyup", function (event) {
+            keys[event.key] = false;
+        });
+
+        function movePaddles() {
+            if (keys["w"] || keys["W"]) {
+                leftPaddle.y -= leftPaddle.speed;
+            }
+            if (keys["s"] || keys["S"]) {
+                leftPaddle.y += leftPaddle.speed;
+            }
+
+            //if(keys["ArrowUp"]) {
+            //      rightPaddle.y -= rightPaddle.speed;
+            ///  }
+            // if(keys["ArrowDown"]) {
+            //     rightPaddle.y += rightPaddle.speed;
+            //   }
+            keepPaddleInside(leftPaddle);
+            //keepPaddleInside(rightPaddle);
+
+        }
+
+
+        function isBallHitPaddle(paddle) {
+            return (
+                ball.x - ball.radius < paddle.x + paddle.width &&
+                ball.x + ball.radius > paddle.x &&
+                ball.y - ball.radius < paddle.y + paddle.height &&
+                ball.y + ball.radius > paddle.y
+            );
+        }
+
+        function moveAI() {
+            const aiCenter = rightPaddle.y + rightPaddle.height / 2;
+            const speed = 2;
+
+            if (ball.y < aiCenter) {
+                rightPaddle.y -= speed;
+            }
+            else {
+                rightPaddle.y += speed;
+            }
+            keepPaddleInside(rightPaddle);
+        }
+
+        function keepPaddleInside(paddle) {
+            if (paddle.y < 0) {
+                paddle.y = 0;
+            }
+            if (paddle.y + paddle.height > canvas.height) {
+                paddle.y = canvas.height - paddle.height;
+            }
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx *= -1;
+            ball.dy = Math.random() * 6 - 3;
+            if (ball.dy === 0) {
+                ball.dy = 4;
+            }
+        }
+
+        const paddleWidth = 12;
+        const paddleHeight = 80;
+
+        const leftPaddle = {
+            x: 30,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            speed: 6
+        };
+
+        const rightPaddle = {
+            x: canvas.width - 30 - paddleWidth,
+            y: canvas.height / 2 - paddleHeight / 2,
+            width: paddleWidth,
+            height: paddleHeight,
+            speed: 6
+        }
+
+        function drawRect(rect) {
+            ctx.fillStyle = "white";
+            ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawCenterLine();
+            moveBall();
+            drawBall();
+            movePaddles();
+            moveAI();
+            keepPaddleInside(leftPaddle);
+            keepPaddleInside(rightPaddle);
+            drawRect(leftPaddle);
+            drawRect(rightPaddle);
+            requestAnimationFrame(drawGame);
+        }
+        drawGame();
+
+    </script>
+</body>
+
+</html>
