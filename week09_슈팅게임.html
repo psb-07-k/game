@@ -1,0 +1,440 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>슈팅게임</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+            background: #050816;
+            color: white;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: #111;
+        }
+
+        #restartBtn {
+            display: none;
+            margin: 15px auto;
+            padding: 12px 30px;
+            font-size: 18px;
+            background: deepskyblue;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        #restartBtn:hover {
+            background: dodgerblue;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Space Shooter</h1>
+    <p>점수: <span id="score">0</span> | 생명: <span id="life">3</span></p>
+    <p>조작: ← / → 이동, Space 발사</p>
+    <canvas id="gameCanvas" width="600" height="400"></canvas>
+
+    <button id="restartBtn" onclick="restartGame()">다시 시작</button>
+
+    <!-- 기초세팅 -->
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const scoreText = document.getElementById("score");
+        const lifeText = document.getElementById("life");
+        const restartBtn = document.getElementById("restartBtn");
+
+        let score = 0;
+        let life = 3;
+        let gameOver = false;
+
+        // 플레이어 기본 틀
+        const player = {
+            x: 280,
+            y: 340,
+            width: 40,
+            height: 40,
+            speed: 6
+        };
+
+        // 플레이어와 총알
+        function drawPlayer() {
+            ctx.fillStyle = "deepskyblue";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(player.x + 15, player.y - 10, 10, 10);
+        }
+
+        // 이동키 및 발사키
+        const keys = {};
+
+        document.addEventListener("keydown", function (event) {
+            keys[event.code] = true;
+
+            if (event.code === "Space") {
+                event.preventDefault();
+            }
+        });
+
+        document.addEventListener("keyup", function (event) {
+            keys[event.code] = false;
+        });
+
+        // 플레이어가 벽 밖으로 나가지 않게 설정
+        function movePlayer() {
+            if (keys["ArrowLeft"]) {
+                player.x -= player.speed;
+            }
+
+            if (keys["ArrowRight"]) {
+                player.x += player.speed;
+            }
+
+            if (player.x < 0) {
+                player.x = 0;
+            }
+
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+        }
+
+        // 총알 생성과 관련 코드
+        const bullets = [];
+
+        // 총알 자동 발사 설정
+        let shootTimer = 0;
+        const shootInterval = 15;
+
+        // 총알 설정
+        function shootBullet() {
+            bullets.push({
+                x: player.x + player.width / 2 - 3,
+                y: player.y,
+                width: 6,
+                height: 12,
+                speed: 7
+            });
+        }
+
+        // 총알 그리기
+        function drawBullets() {
+            ctx.fillStyle = "yellow";
+
+            for (let bullet of bullets) {
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
+            }
+        }
+
+        // 총알 움직이기
+        function moveBullets() {
+            for (let bullet of bullets) {
+                bullet.y -= bullet.speed;
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                if (bullets[i].y + bullets[i].height < 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        // 적 세팅
+        const enemies = [];
+
+        function createEnemy() {
+            if (gameOver) return;
+
+            enemies.push({
+                x: Math.random() * (canvas.width - 40),
+                y: -40,
+                width: 40,
+                height: 40,
+                speed: Math.random() * 2 + 2
+            });
+        }
+
+        // 적 그리기
+        function drawEnemies() {
+            ctx.fillStyle = "crimson";
+
+            for (let enemy of enemies) {
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            }
+        }
+
+        // 적 움직이기
+        function moveEnemies() {
+            for (let enemy of enemies) {
+                enemy.y += enemy.speed;
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+
+                    life--;
+                    lifeText.textContent = life;
+
+                    if (life <= 0) {
+                        endGame();
+                    }
+                }
+            }
+        }
+
+        // 총알과 적이 닿았는지 체크
+        function checkBulletEnemyCollision() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    const bullet = bullets[j];
+
+                    if (
+                        bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y
+                    ) {
+                        // 적 폭발 효과 생성
+                        createExplosion(
+                            enemy.x + enemy.width / 2,
+                            enemy.y + enemy.height / 2
+                        );
+
+                        enemies.splice(i, 1);
+                        bullets.splice(j, 1);
+
+                        score++;
+                        scoreText.textContent = score;
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 플레이어와 적 충돌
+        function checkPlayerEnemyCollision() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+
+                if (
+                    player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y
+                ) {
+                    enemies.splice(i, 1);
+
+                    life--;
+                    lifeText.textContent = life;
+
+                    if (life <= 0) {
+                        endGame();
+                    }
+                }
+            }
+        }
+
+        // 게임 오버
+        function endGame() {
+            gameOver = true;
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = "32px Arial";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+
+            ctx.fillText("게임 오버!", canvas.width / 2, canvas.height / 2 - 20);
+            ctx.fillText("최종 점수 :" + score, canvas.width / 2, canvas.height / 2 + 30);
+
+            restartBtn.style.display = "block";
+        }
+
+        // =================================
+        // 추가 기능 1. 우주 배경
+        // =================================
+
+        const stars = [];
+
+        // 별 생성
+        for (let i = 0; i < 100; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: Math.random() * 2 + 1,
+                speed: Math.random() * 1.5 + 0.5,
+                alpha: Math.random()
+            });
+        }
+
+        // 별 그리기 및 움직이기
+        function drawStars() {
+            for (let star of stars) {
+                ctx.fillStyle = "rgba(255, 255, 255, " + star.alpha + ")";
+                ctx.fillRect(star.x, star.y, star.size, star.size);
+
+                star.y += star.speed;
+
+                if (star.y > canvas.height) {
+                    star.y = 0;
+                    star.x = Math.random() * canvas.width;
+                }
+
+                // 별 반짝이기
+                star.alpha = Math.random() * 0.8 + 0.2;
+            }
+        }
+
+        // =================================
+        // 추가 기능 2. 적 폭발 효과
+        // =================================
+
+        const explosions = [];
+
+        // 폭발 생성
+        function createExplosion(x, y) {
+            for (let i = 0; i < 15; i++) {
+                explosions.push({
+                    x: x,
+                    y: y,
+                    speedX: (Math.random() - 0.5) * 8,
+                    speedY: (Math.random() - 0.5) * 8,
+                    size: Math.random() * 5 + 2,
+                    life: 30,
+                    color: Math.random() > 0.5 ? "orange" : "yellow"
+                });
+            }
+        }
+
+        // 폭발 그리기
+        function drawExplosions() {
+            for (let i = explosions.length - 1; i >= 0; i--) {
+                const p = explosions[i];
+
+                ctx.globalAlpha = p.life / 30;
+                ctx.fillStyle = p.color;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 파티클 이동
+                p.x += p.speedX;
+                p.y += p.speedY;
+
+                p.life--;
+
+                // 수명이 끝난 파티클 삭제
+                if (p.life <= 0) {
+                    explosions.splice(i, 1);
+                }
+            }
+
+            ctx.globalAlpha = 1;
+        }
+
+        // =================================
+        // 추가 기능 3. 게임 재시작
+        // =================================
+
+        function restartGame() {
+            // 점수와 생명 초기화
+            score = 0;
+            life = 3;
+
+            scoreText.textContent = score;
+            lifeText.textContent = life;
+
+            // 플레이어 위치 초기화
+            player.x = 280;
+            player.y = 340;
+
+            // 적, 총알, 폭발 초기화
+            enemies.length = 0;
+            bullets.length = 0;
+            explosions.length = 0;
+
+            // 키 상태 초기화
+            for (let key in keys) {
+                keys[key] = false;
+            }
+
+            // 자동 발사 타이머 초기화
+            shootTimer = 0;
+
+            // 게임 상태 초기화
+            gameOver = false;
+
+            // 버튼 숨기기
+            restartBtn.style.display = "none";
+
+            // 게임 다시 실행
+            gameLoop();
+        }
+
+        // =================================
+        // 게임 실행
+        // =================================
+
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 우주 배경 그리기
+            drawStars();
+
+            movePlayer();
+
+            // 스페이스바를 누르고 있으면 자동 발사
+            if (keys["Space"]) {
+                shootTimer++;
+
+                if (shootTimer >= shootInterval) {
+                    shootBullet();
+                    shootTimer = 0;
+                }
+            } else {
+                shootTimer = shootInterval;
+            }
+
+            drawPlayer();
+
+            drawBullets();
+            moveBullets();
+
+            moveEnemies();
+            drawEnemies();
+
+            // 폭발 효과 그리기
+            drawExplosions();
+
+            checkBulletEnemyCollision();
+            checkPlayerEnemyCollision();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        setInterval(createEnemy, 500);
+
+        gameLoop();
+
+    </script>
+</body>
+
+</html>
