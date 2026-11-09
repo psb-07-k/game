@@ -1,0 +1,596 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Flappy Bird</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+            background: #10152e;
+            color: white;
+        }
+
+        canvas {
+            border: 2px solid white;
+            background: #080e29;
+        }
+
+        button {
+            padding: 5px 12px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Flappy Bird</h1>
+
+    <p>
+        점수: <span id="score">0</span> |
+        최고 기록: <span id="highScore">0</span>
+    </p>
+
+    <p>
+        조작: Space 키 또는 마우스 클릭
+        <button id="restartBtn"
+            onclick="restart(); this.blur();">
+            다시시작
+        </button>
+    </p>
+
+    <canvas id="gameCanvas" width="400" height="500"></canvas>
+
+    <p id="itemInfo">🛡️ 파란색 아이템을 먹으면 5초 무적!</p>
+
+    <script>
+
+        // 기본 세팅
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const scoreText = document.getElementById("score");
+        const highScoreText = document.getElementById("highScore");
+        const itemInfo = document.getElementById("itemInfo");
+
+        let score = 0;
+        let gameOver = false;
+
+        // 새 설정
+        const bird = {
+            x: 80,
+            y: 250,
+            radius: 15,
+            velocity: 0,
+            gravity: 0.3,
+            jumpPower: -8
+        };
+
+        // 밤하늘 별 설정
+        const stars = [];
+
+        for (let i = 0; i < 70; i++) {
+            stars.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 1.5 + 0.5,
+                alpha: Math.random()
+            });
+        }
+
+        // 별 그리기
+        function drawStars() {
+            for (let star of stars) {
+                star.alpha += (Math.random() - 0.5) * 0.1;
+
+                if (star.alpha < 0.3) star.alpha = 0.3;
+                if (star.alpha > 1) star.alpha = 1;
+
+                ctx.beginPath();
+                ctx.arc(
+                    star.x,
+                    star.y,
+                    star.radius,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fillStyle = `rgba(255,255,255,${star.alpha})`;
+                ctx.fill();
+            }
+        }
+
+        // 밤하늘 배경 그리기
+        function drawBackground() {
+            const gradient = ctx.createLinearGradient(
+                0, 0, 0, canvas.height
+            );
+
+            gradient.addColorStop(0, "#080e29");
+            gradient.addColorStop(1, "#202d57");
+
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawStars();
+
+            // 달 그리기
+            ctx.beginPath();
+            ctx.arc(320, 80, 30, 0, Math.PI * 2);
+            ctx.fillStyle = "#fff4c2";
+            ctx.fill();
+
+            // 초승달 효과
+            ctx.beginPath();
+            ctx.arc(335, 68, 27, 0, Math.PI * 2);
+            ctx.fillStyle = "#080e29";
+            ctx.fill();
+        }
+
+        // 새 그리기
+        function drawBird() {
+            ctx.beginPath();
+            ctx.arc(
+                bird.x,
+                bird.y,
+                bird.radius,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = "yellow";
+            ctx.fill();
+
+            ctx.fillStyle = "black";
+            ctx.beginPath();
+            ctx.arc(
+                bird.x + 5,
+                bird.y - 5,
+                3,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+
+            // 무적 상태 표시
+            if (isInvincible) {
+                ctx.beginPath();
+                ctx.arc(
+                    bird.x,
+                    bird.y,
+                    bird.radius + 8,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.strokeStyle = "#00ffff";
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        // 새 움직이기
+        function moveBird() {
+            bird.velocity += bird.gravity;
+            bird.y += bird.velocity;
+
+            if (
+                bird.y - bird.radius < 0 ||
+                bird.y + bird.radius > canvas.height
+            ) {
+                endGame();
+            }
+        }
+
+        // 새 점프하기
+        function jump() {
+            if (gameOver) return;
+            bird.velocity = bird.jumpPower;
+        }
+
+        document.addEventListener("keydown", function (event) {
+            if (event.code === "Space") {
+                event.preventDefault();
+                jump();
+            }
+        });
+
+        canvas.addEventListener("click", jump);
+
+        // 재시작
+        function restart() {
+            if (!gameOver) return;
+
+            bird.y = 250;
+            bird.velocity = 0;
+
+            pipes.length = 0;
+            item = null;
+
+            score = 0;
+            scoreText.textContent = 0;
+
+            pipeSpeed = 3;
+
+            isInvincible = false;
+            invincibleEndTime = 0;
+
+            itemInfo.textContent =
+                "🛡️ 파란색 아이템을 먹으면 5초 무적!";
+
+            startCountdown();
+
+            gameOver = false;
+            gameLoop();
+        }
+
+        // 카운트다운
+        let countdown = 3;
+
+        function startCountdown() {
+            countdown = 3;
+
+            const timer = setInterval(function () {
+                countdown--;
+
+                if (countdown <= 0) {
+                    clearInterval(timer);
+                }
+            }, 1000);
+        }
+
+        // 파이프 설정
+        const pipes = [];
+
+        const pipeWidth = 60;
+        const pipeGap = 140;
+
+        let pipeSpeed = 3;
+
+        function createPipe() {
+            if (countdown > 0 || gameOver) return;
+
+            const topHeight = Math.random() * 220 + 50;
+
+            pipes.push({
+                x: canvas.width,
+                topHeight: topHeight,
+                bottomY: topHeight + pipeGap,
+                passed: false
+            });
+        }
+
+        // 파이프 그리기
+        function drawPipes() {
+            ctx.fillStyle = "#159447";
+
+            for (let pipe of pipes) {
+                ctx.fillRect(
+                    pipe.x, 0,
+                    pipeWidth,
+                    pipe.topHeight
+                );
+
+                ctx.fillRect(
+                    pipe.x,
+                    pipe.bottomY,
+                    pipeWidth,
+                    canvas.height - pipe.bottomY
+                );
+
+                // 파이프 테두리
+                ctx.strokeStyle = "#72e69b";
+                ctx.lineWidth = 2;
+
+                ctx.strokeRect(
+                    pipe.x, 0,
+                    pipeWidth,
+                    pipe.topHeight
+                );
+
+                ctx.strokeRect(
+                    pipe.x,
+                    pipe.bottomY,
+                    pipeWidth,
+                    canvas.height - pipe.bottomY
+                );
+            }
+        }
+
+        // 파이프 움직이기
+        function movrPipes() {
+            for (let pipe of pipes) {
+                pipe.x -= pipeSpeed;
+
+                if (
+                    !pipe.passed &&
+                    pipe.x + pipeWidth < bird.x
+                ) {
+                    score++;
+
+                    scoreText.textContent = score;
+                    pipe.passed = true;
+
+                    updateHighScore();
+
+                    // 점수가 올라갈수록 속도 증가
+                    pipeSpeed = 3 + Math.floor(score / 5) * 0.5;
+                }
+            }
+
+            for (let i = pipes.length - 1; i >= 0; i--) {
+                if (pipes[i].x + pipeWidth < 0) {
+                    pipes.splice(i, 1);
+                }
+            }
+        }
+
+        // 무적 아이템 설정
+        let item = null;
+
+        let isInvincible = false;
+
+        let invincibleEndTime = 0;
+
+        const invincibleDuration = 5000;
+
+        // 아이템 생성
+        function createItem() {
+            if (countdown > 0 || gameOver) return;
+
+            if (item === null) {
+                item = {
+                    x: canvas.width,
+                    y: Math.random() * 350 + 75,
+                    radius: 13
+                };
+            }
+        }
+
+        // 아이템 그리기
+        function drawItem() {
+            if (item === null) return;
+
+            // 빛나는 효과
+            ctx.beginPath();
+            ctx.arc(
+                item.x,
+                item.y,
+                item.radius + 7,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = "rgba(0,255,255,0.2)";
+            ctx.fill();
+
+            // 아이템 본체
+            ctx.beginPath();
+            ctx.arc(
+                item.x,
+                item.y,
+                item.radius,
+                0,
+                Math.PI * 2
+            );
+
+            ctx.fillStyle = "#00ffff";
+            ctx.fill();
+
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // 방패 모양
+            ctx.font = "16px Arial";
+            ctx.textAlign = "center";
+            ctx.fillStyle = "#003366";
+
+            ctx.fillText(
+                "S",
+                item.x,
+                item.y + 5
+            );
+        }
+
+        // 아이템 움직이기
+        function moveItem() {
+            if (item === null) return;
+
+            item.x -= pipeSpeed;
+
+            // 새와 아이템 충돌 확인
+            const dx = bird.x - item.x;
+            const dy = bird.y - item.y;
+
+            const distance = Math.sqrt(
+                dx * dx + dy * dy
+            );
+
+            if (distance < bird.radius + item.radius) {
+                // 무적 시작
+                isInvincible = true;
+
+                invincibleEndTime =
+                    Date.now() + invincibleDuration;
+
+                itemInfo.textContent = "🛡️ 무적 상태! 5초 동안 보호됩니다!";
+
+                item = null;
+            }
+
+            // 화면 밖으로 나가면 제거
+            if (item !== null && item.x < -20) {
+                item = null;
+            }
+        }
+
+        // 무적 시간 확인
+        function updateInvincible() {
+            if (isInvincible) {
+                if (Date.now() >= invincibleEndTime) {
+                    isInvincible = false;
+
+                    itemInfo.textContent =
+                        "🛡️ 파란색 아이템을 먹으면 5초 무적!";
+                } else {
+                    const remaining = Math.ceil(
+                        (invincibleEndTime - Date.now()) / 1000
+                    );
+
+                    itemInfo.textContent =
+                        "🛡️ 무적 남은 시간: " + remaining + "초";
+                }
+            }
+        }
+
+        // 충돌 확인
+        function checkCollision() {
+
+            // 무적이면 파이프 충돌 무시
+            if (isInvincible) return;
+
+            for (let pipe of pipes) {
+
+                const birdLeft = bird.x - bird.radius;
+                const birdRight = bird.x + bird.radius;
+                const birdTop = bird.y - bird.radius;
+                const birdBottom = bird.y + bird.radius;
+
+                const pipeLeft = pipe.x;
+                const pipeRight = pipe.x + pipeWidth;
+
+                const hitTopPipe =
+                    birdRight > pipeLeft &&
+                    birdLeft < pipeRight &&
+                    birdTop < pipe.topHeight;
+
+                const hitBottomPipe =
+                    birdRight > pipeLeft &&
+                    birdLeft < pipeRight &&
+                    birdBottom > pipe.bottomY;
+
+                if (hitTopPipe || hitBottomPipe) {
+                    endGame();
+                    return;
+                }
+            }
+        }
+
+        // 게임 종료
+        function endGame() {
+            if (gameOver) return;
+
+            gameOver = true;
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(
+                0, 0,
+                canvas.width,
+                canvas.height
+            );
+
+            ctx.font = "32px Arial";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+
+            ctx.fillText(
+                "게임 오버!",
+                canvas.width / 2,
+                canvas.height / 2 - 30
+            );
+
+            ctx.fillText(
+                "점수 :" + score,
+                canvas.width / 2,
+                canvas.height / 2 + 20
+            );
+        }
+
+        // 최고 기록 저장
+        let highScore =
+            Number(localStorage.getItem("flappyHighScore")) || 0;
+
+        highScoreText.textContent = highScore;
+
+        function updateHighScore() {
+            if (score > highScore) {
+                highScore = score;
+
+                highScoreText.textContent = highScore;
+
+                localStorage.setItem(
+                    "flappyHighScore",
+                    highScore
+                );
+            }
+        }
+
+        // 게임 시작
+        function gameLoop() {
+            if (gameOver) return;
+
+            ctx.clearRect(
+                0, 0,
+                canvas.width,
+                canvas.height
+            );
+
+            // 밤하늘 배경
+            drawBackground();
+
+            // 카운트다운
+            if (countdown > 0) {
+                drawBird();
+
+                ctx.font = "80px Arial";
+                ctx.fillStyle = "white";
+                ctx.textAlign = "center";
+
+                ctx.fillText(
+                    countdown,
+                    canvas.width / 2,
+                    canvas.height / 2
+                );
+
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            // 게임 진행
+            moveBird();
+
+            if (gameOver) return;
+
+            movrPipes();
+            moveItem();
+            updateInvincible();
+
+            checkCollision();
+
+            if (gameOver) return;
+
+            drawPipes();
+            drawItem();
+            drawBird();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 파이프 생성
+        setInterval(createPipe, 1500);
+
+        // 무적 아이템 생성 (7초마다 시도)
+        setInterval(createItem, 7000);
+
+        // 게임 시작
+        startCountdown();
+        gameLoop();
+
+    </script>
+
+</body>
+</html>
