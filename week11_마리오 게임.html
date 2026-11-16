@@ -1,0 +1,504 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>마리오 게임</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+        }
+
+        canvas {
+            border: 2px solid black;
+            background: skyblue;
+        }
+
+        button, select {
+            padding: 8px 15px;
+            margin: 10px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>MiNi Mario</h1>
+
+    <p>
+        점수: <span id="score">0</span> |
+        생명: <span id="life">3</span>
+    </p>
+
+    <p>조작: ←/→ 이동, Space 점프</p>
+
+    <div>
+        난이도:
+        <select id="difficulty">
+            <option value="1">하</option>
+            <option value="1.5" selected>중</option>
+            <option value="2">상</option>
+        </select>
+    </div>
+
+    <button id="restartButton" style="display:none;">
+        다시 시작
+    </button>
+
+    <br>
+
+    <canvas id="gameCanvas" width="700" height="400"></canvas>
+
+    <script>
+
+        // 기본 세팅
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const scoreText = document.getElementById("score");
+        const lifeText = document.getElementById("life");
+
+        const difficultySelect = document.getElementById("difficulty");
+        const restartButton = document.getElementById("restartButton");
+
+        let score = 0;
+        let gameOver = false;
+        let gameclear = false;
+
+        let difficultyMultiplier = 1.5;
+
+        const gravity = 0.6;
+
+        // 난이도 설정
+        difficultySelect.addEventListener("change", function () {
+            difficultyMultiplier = Number(this.value);
+        });
+
+        // 바닥 설정
+        const platforms = [
+            { x: 0, y: 360, width: 700, height: 40 },
+            { x: 140, y: 290, width: 120, height: 20 },
+            { x: 320, y: 230, width: 120, height: 20 },
+            { x: 500, y: 170, width: 120, height: 20 },
+        ];
+
+        // 바닥 그리기
+        function drawPlatforms() {
+            ctx.fillStyle = "sienna";
+
+            for (let platform of platforms) {
+                ctx.fillRect(
+                    platform.x,
+                    platform.y,
+                    platform.width,
+                    platform.height
+                );
+            }
+        }
+
+        // 코인 설정
+        const coins = [
+            { x: 180, y: 250, radius: 10, collected: false },
+            { x: 360, y: 190, radius: 10, collected: false },
+            { x: 540, y: 130, radius: 10, collected: false },
+        ];
+
+        // 코인 그리기
+        function drawCoins() {
+            for (let coin of coins) {
+                if (coin.collected) continue;
+
+                ctx.beginPath();
+                ctx.arc(coin.x, coin.y, coin.radius, 0, Math.PI * 2);
+                ctx.fillStyle = "gold";
+                ctx.fill();
+            }
+        }
+
+        // 골 설정
+        const goal = {
+            x: 650, y: 300, width: 30, height: 60
+        };
+
+        // 골 그리기
+        function drawGoal() {
+            ctx.fillStyle = "green";
+            ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(goal.x + 5, goal.y + 10, 20, 15);
+        }
+
+        // 플레이어 설정
+        const player = {
+            x: 50, y: 300, width: 35, height: 45,
+            dx: 0, dy: 0,
+            speed: 5, jumpPower: -12,
+            onGround: false
+        };
+
+        // 플레이어 그리기
+        function drawPlayer() {
+            ctx.fillStyle = "red";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = "blue";
+            ctx.fillRect(player.x, player.y + 20, player.width, 25);
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(player.x + 8, player.y + 10, 6, 6);
+            ctx.fillRect(player.x + 22, player.y + 10, 6, 6);
+        }
+
+        // 움직이는 키
+        const keys = {};
+
+        document.addEventListener("keydown", function (event) {
+            keys[event.code] = true;
+
+            if (event.code === "Space" && player.onGround &&
+                !gameOver && !gameclear) {
+                player.dy = player.jumpPower;
+                player.onGround = false;
+            }
+
+            if (event.code === "ArrowLeft" ||
+                event.code === "ArrowRight" ||
+                event.code === "Space") {
+                event.preventDefault();
+            }
+        });
+
+        document.addEventListener("keyup", function (event) {
+            keys[event.code] = false;
+        });
+
+        // 플레이어 움직이기
+        function movePlayer() {
+            player.dx = 0;
+
+            if (keys["ArrowLeft"]) {
+                player.dx = -player.speed;
+            }
+
+            if (keys["ArrowRight"]) {
+                player.dx = player.speed;
+            }
+
+            player.x += player.dx;
+
+            player.dy += gravity;
+            player.y += player.dy;
+
+            player.onGround = false;
+
+            for (let platform of platforms) {
+
+                if (
+                    player.x < platform.x + platform.width &&
+                    player.x + player.width > platform.x &&
+                    player.y < platform.y + platform.height &&
+                    player.y + player.height > platform.y
+                ) {
+
+                    if (player.dy > 0) {
+                        player.y = platform.y - player.height;
+                        player.dy = 0;
+                        player.onGround = true;
+                    }
+                }
+            }
+
+            if (player.x < 0) {
+                player.x = 0;
+            }
+
+            if (player.x + player.width > canvas.width) {
+                player.x = canvas.width - player.width;
+            }
+        }
+
+        // 코인 먹었는지 확인
+        function checkCoinCollision() {
+            for (let coin of coins) {
+                if (coin.collected) continue;
+
+                const playerCenterX = player.x + player.width / 2;
+                const playerCenterY = player.y + player.height / 2;
+
+                const dx = playerCenterX - coin.x;
+                const dy = playerCenterY - coin.y;
+
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance < coin.radius + player.width / 2) {
+                    coin.collected = true;
+                    score++;
+                    scoreText.textContent = score;
+                }
+            }
+        }
+
+        // 도착점에 도달 확인
+        function checkGoalCollision() {
+            if (
+                player.x < goal.x + goal.width &&
+                player.x + player.width > goal.x &&
+                player.y < goal.y + goal.height &&
+                player.y + player.height > goal.y
+            ) {
+                clearGame();
+            }
+        }
+
+        // 게임 클리어 확인
+        function clearGame() {
+            gameclear = true;
+        }
+
+        // 게임 오버 확인
+        function endGame() {
+            gameOver = true;
+        }
+
+        // 메시지 출력
+        function drawMessage(message) {
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.font = "36px Arial";
+            ctx.fillStyle = "white";
+            ctx.textAlign = "center";
+
+            ctx.fillText(
+                message,
+                canvas.width / 2,
+                canvas.height / 2 - 20
+            );
+
+            ctx.fillText(
+                "점수 :" + score,
+                canvas.width / 2,
+                canvas.height / 2 + 30
+            );
+
+            restartButton.style.display = "inline-block";
+        }
+
+        // 생명
+        let life = 3;
+
+        // 적 설정 (총 4마리)
+        const enemies = [
+            {
+                x: 250, y: 330, width: 35, height: 30,
+                dx: 2, minX: 180, MaxX: 360, alive: true
+            },
+            {
+                x: 350, y: 200, width: 35, height: 30,
+                dx: 1.5, minX: 320, MaxX: 440, alive: true
+            },
+            {
+                x: 150, y: 260, width: 35, height: 30,
+                dx: 2, minX: 140, MaxX: 260, alive: true
+            },
+            {
+                x: 520, y: 330, width: 35, height: 30,
+                dx: 2.5, minX: 450, MaxX: 650, alive: true
+            }
+        ];
+
+        // 적 그리기
+        function drawEnemies() {
+            for (let enemy of enemies) {
+                if (!enemy.alive) continue;
+
+                ctx.fillStyle = "purple";
+                ctx.fillRect(
+                    enemy.x,
+                    enemy.y,
+                    enemy.width,
+                    enemy.height
+                );
+
+                ctx.fillStyle = "white";
+                ctx.fillRect(enemy.x + 7, enemy.y + 8, 6, 6);
+                ctx.fillRect(enemy.x + 22, enemy.y + 8, 6, 6);
+            }
+        }
+
+        // 적 움직이기
+        function moveEnemies() {
+            for (let enemy of enemies) {
+                if (!enemy.alive) continue;
+
+                enemy.x += enemy.dx * difficultyMultiplier;
+
+                if (
+                    enemy.x < enemy.minX ||
+                    enemy.x + enemy.width > enemy.MaxX
+                ) {
+                    enemy.dx *= -1;
+                }
+            }
+        }
+
+        // 적이랑 닿았는지 체크
+        function checkEnemyCollision() {
+            for (let enemy of enemies) {
+                if (!enemy.alive) continue;
+
+                const isHit =
+                    player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y;
+
+                if (isHit) {
+
+                    const playerBottom = player.y + player.height;
+                    const enemyTop = enemy.y;
+
+                    if (
+                        player.dy > 0 &&
+                        playerBottom - enemyTop < 15
+                    ) {
+                        enemy.alive = false;
+
+                        player.dy = -8;
+
+                        score += 2;
+                        scoreText.textContent = score;
+
+                    } else {
+
+                        life--;
+                        lifeText.textContent = life;
+
+                        resetPlayer();
+
+                        if (life <= 0) {
+                            endGame();
+                        }
+
+                        return;
+                    }
+                }
+            }
+        }
+
+        // 플레이어 위치 리셋
+        function resetPlayer() {
+            player.x = 50;
+            player.y = 300;
+            player.dx = 0;
+            player.dy = 0;
+            player.onGround = false;
+        }
+
+        // 게임 재시작
+        function restartGame() {
+
+            score = 0;
+            life = 3;
+
+            scoreText.textContent = score;
+            lifeText.textContent = life;
+
+            gameOver = false;
+            gameclear = false;
+
+            resetPlayer();
+
+            // 코인 초기화
+            for (let coin of coins) {
+                coin.collected = false;
+            }
+
+            // 적 초기화
+            for (let enemy of enemies) {
+                enemy.alive = true;
+            }
+
+            // 적 위치와 방향 초기화
+            enemies[0].x = 250;
+            enemies[0].dx = 2;
+
+            enemies[1].x = 350;
+            enemies[1].dx = 1.5;
+
+            enemies[2].x = 150;
+            enemies[2].dx = 2;
+
+            enemies[3].x = 520;
+            enemies[3].dx = 2.5;
+
+            // 난이도 유지
+            difficultyMultiplier = Number(difficultySelect.value);
+
+            restartButton.style.display = "none";
+
+            gameLoop();
+        }
+
+        restartButton.addEventListener("click", restartGame);
+
+        // 게임 계속 돌아가게 하기
+        function gameLoop() {
+
+            if (gameOver || gameclear) {
+                drawMessage(gameOver ? "게임 오버!" : "게임 클리어!");
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            movePlayer();
+            moveEnemies();
+
+            checkEnemyCollision();
+
+            if (gameOver) {
+                drawMessage("게임 오버!");
+                return;
+            }
+
+            checkCoinCollision();
+            checkGoalCollision();
+
+            if (gameclear) {
+                drawMessage("게임 클리어!");
+                return;
+            }
+
+            drawCoins();
+            drawGoal();
+            drawPlatforms();
+            drawEnemies();
+            drawPlayer();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 게임 시작
+        gameLoop();
+
+    </script>
+
+</body>
+</html>
+
+
+
+
+
+
+    </script>
+
+</body>
+
+</html>
