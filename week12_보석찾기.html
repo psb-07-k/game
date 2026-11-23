@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>RPG 이동 - 보석 찾기 퀘스트</title>
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial, sans-serif;
+        }
+
+        canvas {
+            border: 2px solid black;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>RPG 보석 찾기</h1>
+    <p>방향키: 이동 / NPC 근처에서 Space: 대화 / R: 다시 시작</p>
+    <canvas id="gameCanvas" width="640" height="480"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const tileSize = 40;
+        // 난이도 설정
+        const difficulty = prompt("난이도를 선택하세요 (상 / 중 / 하)", "중");
+
+        const difficultySettings = {
+            "상": { count: 7, speed: 2.5 },
+            "중": { count: 5, speed: 1.5 },
+            "하": { count: 2, speed: 0.8 }
+        };
+
+        const setting = difficultySettings[difficulty] || difficultySettings["중"];
+
+        // 플레이어 체력
+        let hp = 30;
+        let gameOver = false;
+
+        // 플레이어 방향
+        let facing = "right";
+
+        // 공격 이펙트
+        let attacking = false;
+        let attackTime = 0;
+
+        // 몬스터
+
+
+        const monsters = [];
+
+        const monsterPositions = [
+            { x: 200, y: 120 },
+            { x: 400, y: 120 },
+            { x: 560, y: 200 },
+            { x: 120, y: 240 },
+            { x: 360, y: 320 },
+            { x: 560, y: 320 },
+            { x: 240, y: 360 }
+        ];
+
+        function createMonsters() {
+            monsters.length = 0;
+
+            for (let i = 0; i < setting.count; i++) {
+                let pos = monsterPositions[i];
+
+                if (!isMonsterWall(pos.x, pos.y, 26, 26)) {
+                    monsters.push({
+                        x: pos.x,
+                        y: pos.y,
+                        width: 26,
+                        height: 26,
+                        speed: setting.speed,
+                        alive: true,
+                        damageTime: 0
+                    });
+                }
+            }
+        }
+        // 몬스터 생성
+        for (let i = 0; i < setting.count; i++) {
+            monsters.push({
+                x: monsterPositions[i].x,
+                y: monsterPositions[i].y,
+                width: 26,
+                height: 26,
+                speed: setting.speed,
+                alive: true,
+                damageTime: 0
+            });
+        }
+
+        // 처치 이펙트
+        const effects = [];
+        let gameClear = false;
+
+        // 0: 길, 1: 벽, 2: 물,, 맵 타일 위치
+        const map = [
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 1],
+            [1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 1, 0, 0, 0, 2, 0, 1, 0, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            [1, 0, 0, 2, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1],
+            [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        ];
+
+        //맵 그리기
+        function drawMap() {
+            for (let row = 0; row < map.length; row++) {
+                for (let col = 0; col < map[row].length; col++) {
+                    const tile = map[row][col];
+                    if (tile === 0) ctx.fillStyle = "#7ac943";
+                    if (tile === 1) ctx.fillStyle = "#5a3a2a";
+                    if (tile === 2) ctx.fillStyle = "#3498db";
+                    ctx.fillRect(col * tileSize, row * tileSize, tileSize, tileSize);
+                    ctx.strokeStyle = "#777";
+                    ctx.strokeRect(col * tileSize, row * tileSize, tileSize, tileSize);
+                }
+            }
+        }
+
+        //npc 위치
+        const npc = { x: 480, y: 280, width: 32, height: 32 };
+
+        //npc 그리기
+        function drawNPC() {
+            ctx.fillStyle = "purple";
+            ctx.fillRect(npc.x, npc.y, npc.width, npc.height);
+            ctx.fillStyle = "white";
+            ctx.fillRect(npc.x + 7, npc.y + 8, 5, 5);
+            ctx.fillRect(npc.x + 20, npc.y + 8, 5, 5);
+
+            if (isNearNPC() && !gameClear) {
+                ctx.fillStyle = "black";
+                ctx.font = "14px Arial";
+                ctx.fillText("Space를 눌러봐!", npc.x - 5, npc.y - 8);
+            }
+        }
+
+        //플레이어 위치
+        const player = { x: 80, y: 80, width: 28, height: 28, speed: 4 };
+
+        //플레이어 그리기
+        function drawPlayer() {
+            ctx.fillStyle = "red";
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.fillStyle = "white";
+            ctx.fillRect(player.x + 6, player.y + 8, 5, 5);
+            ctx.fillRect(player.x + 17, player.y + 8, 5, 5);
+        }
+
+        //키 입력
+        const keys = {};
+
+        document.addEventListener("keydown", function (event) {
+            keys[event.key] = true;
+
+            if (event.key.startsWith("Arrow") || event.code === "Space") {
+                event.preventDefault(); // pre 얘는 화면 고정하는 애
+            }
+            if (event.repeat) return;
+
+            if (event.code === "Space") talkToNPC();
+            // Z 키 공격
+            if (event.key.toLowerCase() === "z") {
+                attackMonster();
+            }
+
+            if (event.key === "r" || event.key === "R") location.reload();
+        });
+        document.addEventListener("keyup", function (event) {
+            keys[event.key] = false;
+        });
+
+        //플레이어 움직이기
+        function movePlayer() {
+            if (showDialog || gameClear || gameOver) return;
+
+            let nextX = player.x;
+            let nextY = player.y;
+
+            if (keys["ArrowLeft"]) nextX -= player.speed;
+            if (keys["ArrowRight"]) nextX += player.speed;
+            if (keys["ArrowUp"]) nextY -= player.speed;
+            if (keys["ArrowDown"]) nextY += player.speed;
+
+            if (keys["ArrowLeft"]) {
+                nextX -= player.speed;
+                facing = "left";
+            }
+            if (keys["ArrowRight"]) {
+                nextX += player.speed;
+                facing = "right";
+            }
+            if (keys["ArrowUp"]) {
+                nextY -= player.speed;
+                facing = "up";
+            }
+            if (keys["ArrowDown"]) {
+                nextY += player.speed;
+                facing = "down";
+            }
+
+            if (!isWall(nextX, player.y)) player.x = nextX;
+            if (!isWall(player.x, nextY)) player.y = nextY;
+        }
+
+
+        //벽 튕기게 하기
+        function isWall(x, y) {
+            const left = Math.floor(x / tileSize);
+            const right = Math.floor((x + player.width - 1) / tileSize);
+            const top = Math.floor(y / tileSize);
+            const bottom = Math.floor((y + player.height - 1) / tileSize);
+
+            if (left < 0 || right >= map[0].length || !map[top] || !map[bottom]) return true;
+            return map[top][left] === 1 || map[top][right] === 1 || map[bottom][left] === 1 || map[bottom][right] === 1;
+
+        }
+        // 몬스터 전용 벽 충돌 판정
+        function isMonsterWall(x, y, width, height) {
+            const left = Math.floor(x / tileSize);
+            const right = Math.floor((x + width - 1) / tileSize);
+            const top = Math.floor(y / tileSize);
+            const bottom = Math.floor((y + height - 1) / tileSize);
+
+            if (
+                left < 0 || right >= map[0].length ||
+                top < 0 || bottom >= map.length
+            ) {
+                return true;
+            }
+
+            return (
+                map[top][left] === 1 ||
+                map[top][right] === 1 ||
+                map[bottom][left] === 1 ||
+                map[bottom][right] === 1
+            );
+        }
+
+        // NPC와 가까운지 확인 (말을 걸기 위해)
+        function isNearNPC() {
+            const dx = player.x + player.width / 2 - (npc.x + npc.width / 2);
+            const dy = player.y + player.height / 2 - (npc.y + npc.height / 2);
+            return Math.sqrt(dx * dx + dy * dy) < 70;
+        }
+
+        //보석
+        const gems = [{ x: 140, y: 300, taken: false },
+        { x: 340, y: 180, taken: false },
+        { x: 580, y: 60, taken: false }
+        ];
+
+        let questStarted = false;
+        let gemCount = 0;
+        let showDialog = false;
+        let message = "";
+
+        // 몬스터 공격
+        function attackMonster() {
+            if (gameOver || gameClear || showDialog || attacking) return;
+
+            attacking = true;
+            attackTime = Date.now();
+
+            let attackX = player.x + player.width / 2;
+            let attackY = player.y + player.height / 2;
+
+            // 공격 방향에 따른 위치
+            if (facing === "left") attackX -= 45;
+            if (facing === "right") attackX += 45;
+            if (facing === "up") attackY -= 45;
+            if (facing === "down") attackY += 45;
+
+            for (let monster of monsters) {
+                if (!monster.alive) continue;
+
+                const dx = monster.x + 13 - attackX;
+                const dy = monster.y + 13 - attackY;
+
+                if (Math.sqrt(dx * dx + dy * dy) < 45) {
+                    monster.alive = false;
+
+                    // 처치 이펙트 생성
+                    effects.push({
+                        x: monster.x + 13,
+                        y: monster.y + 13,
+                        time: 0
+                    });
+                }
+            }
+        }
+
+        // 공격 이펙트 그리기
+        function drawAttack() {
+            if (!attacking) return;
+
+            if (Date.now() - attackTime > 200) {
+                attacking = false;
+                return;
+            }
+
+            ctx.save();
+
+            ctx.strokeStyle = "yellow";
+            ctx.lineWidth = 5;
+
+            let x = player.x + 14;
+            let y = player.y + 14;
+
+            ctx.beginPath();
+
+            if (facing === "right") {
+                ctx.moveTo(x + 10, y - 20);
+                ctx.lineTo(x + 45, y);
+                ctx.lineTo(x + 10, y + 20);
+            } else if (facing === "left") {
+                ctx.moveTo(x - 10, y - 20);
+                ctx.lineTo(x - 45, y);
+                ctx.lineTo(x - 10, y + 20);
+            } else if (facing === "up") {
+                ctx.moveTo(x - 20, y - 10);
+                ctx.lineTo(x, y - 45);
+                ctx.lineTo(x + 20, y - 10);
+            } else {
+                ctx.moveTo(x - 20, y + 10);
+                ctx.lineTo(x, y + 45);
+                ctx.lineTo(x + 20, y + 10);
+            }
+
+            ctx.stroke();
+            ctx.restore();
+
+        }
+
+        // 몬스터 움직이기
+        function updateMonsters() {
+            if (gameOver || gameClear || showDialog) return;
+
+            for (let monster of monsters) {
+                if (!monster.alive) continue;
+
+                let dx = player.x - monster.x;
+                let dy = player.y - monster.y;
+
+                let distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 0) {
+                    let nextX = monster.x + (dx / distance) * monster.speed;
+                    let nextY = monster.y + (dy / distance) * monster.speed;
+
+                    // 몬스터도 벽을 통과하지 못하게 설정
+                    if (!isWall(nextX, monster.y, monster.width, monster.height)) {
+                        monster.x = nextX;
+                    }
+
+                    if (!isWall(monster.x, nextY, monster.width, monster.height)) {
+                        monster.y = nextY;
+                    }
+                }
+
+                // 플레이어와 충돌 확인
+                if (
+                    player.x < monster.x + monster.width &&
+                    player.x + player.width > monster.x &&
+                    player.y < monster.y + monster.height &&
+                    player.y + player.height > monster.y
+                ) {
+                    // 0.8초마다 체력 감소
+                    if (Date.now() - monster.damageTime > 800) {
+                        hp -= 10;
+                        monster.damageTime = Date.now();
+
+                        if (hp <= 0) {
+                            hp = 0;
+                            gameOver = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 몬스터 그리기
+        function drawMonsters() {
+            for (let monster of monsters) {
+                if (!monster.alive) continue;
+
+                ctx.fillStyle = "darkred";
+                ctx.fillRect(
+                    monster.x,
+                    monster.y,
+                    monster.width,
+                    monster.height
+                );
+
+                // 눈
+                ctx.fillStyle = "red";
+                ctx.fillRect(monster.x + 5, monster.y + 6, 5, 5);
+                ctx.fillRect(monster.x + 16, monster.y + 6, 5, 5);
+            }
+        }
+
+        // 처치 이펙트 그리기
+        function drawEffects() {
+            for (let i = effects.length - 1; i >= 0; i--) {
+                let effect = effects[i];
+
+                effect.time++;
+
+                ctx.fillStyle = "orange";
+                ctx.beginPath();
+
+                ctx.arc(
+                    effect.x,
+                    effect.y,
+                    effect.time * 2,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+
+                ctx.fillStyle = "yellow";
+                ctx.beginPath();
+
+                ctx.arc(
+                    effect.x,
+                    effect.y,
+                    effect.time,
+                    0,
+                    Math.PI * 2
+                );
+
+                ctx.fill();
+
+                if (effect.time > 12) {
+                    effects.splice(i, 1);
+                }
+            }
+        }
+
+        //설명
+        function drawInfo() {
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 400, 640, 80);
+            ctx.fillStyle = "black";
+            ctx.font = "18px Arial";
+            // 체력 표시
+            ctx.fillStyle = "black";
+            ctx.font = "18px Arial";
+            ctx.fillText("HP: " + hp + "/30", 20, 415);
+
+            ctx.fillStyle = "red";
+            ctx.fillRect(100, 400, hp * 3, 12);
+
+            ctx.strokeStyle = "black";
+            ctx.strokeRect(100, 400, 90, 12);
+            ctx.fillText("보석:" + gemCount + "/3", 20, 435);
+
+            let goal = questStarted ? "보석을 모으세요" : "NPC를 만나세요";
+            if (gemCount === 1) goal = "NPC에게 돌아가세요";
+            ctx.fillText(goal, 170, 435);
+
+            ctx.font = "14px Arial";
+            ctx.fillText("방향키 이동 / Space 대화 / Z 공격 / R 재시작", 20, 465);
+        }
+
+        function drawGameOver() {
+            if (!gameOver) return;
+
+            ctx.fillStyle = "rgba(0,0,0,0.75)";
+            ctx.fillRect(0, 0, 640, 480);
+
+            ctx.fillStyle = "red";
+            ctx.font = "36px Arial";
+            ctx.textAlign = "center";
+            ctx.fillText("GAME OVER", 320, 210);
+
+            ctx.fillStyle = "white";
+            ctx.font = "20px Arial";
+            ctx.fillText("체력이 모두 소진되었습니다!", 320, 260);
+            ctx.fillText("R 키 : 다시 시작", 320, 300);
+
+            ctx.textAlign = "left";
+        }
+
+        //npc랑 대화하기
+        function talkToNPC() {
+            if (gameClear) return;
+            if (showDialog) {
+                showDialog = false;
+                return;
+            }
+            if (!isNearNPC()) return;
+            if (!questStarted) {
+                questStarted = true;
+                message = "보석 3개를 모아서 다시 와 줘!";
+            } else if (gemCount === 3) {
+                gameClear = true;
+                return;
+            } else {
+                message = "보석이" + (3 - gemCount) + "개 남았어!";
+            }
+            showDialog = true;
+        }
+
+        //npc 대화 로그
+        function drawDialog() {
+            if (!showDialog) return;
+
+            ctx.fillStyle = "black";
+            ctx.fillRect(40, 330, 560, 100);
+
+            ctx.fillStyle = "white";
+            ctx.font = "18px Arial";
+            ctx.fillText("NPC:" + message, 60, 380);
+            ctx.fillText("Space: 닫기", 60, 410);
+        }
+
+        //보석 그리기
+        function drawGems() {
+            if (!questStarted) return;
+            for (let gem of gems) {
+                if (gem.taken) continue;
+                ctx.fillStyle = "gold";
+                ctx.fillRect(gem.x - 10, gem.y - 10, 20, 20);
+            }
+        }
+
+        //보석 먹는거 감지(플레이어랑 닿았는지)        
+        function checkGems() {
+            if (!questStarted || showDialog || gameClear) return;
+
+            for (let gem of gems) {
+                const dx = player.x + player.width / 2 - gem.x;
+                const dy = player.y + player.height / 2 - gem.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (!gem.taken && distance < 25) {
+                    gem.taken = true;
+                    gemCount++;
+                }
+            }
+        }
+
+        //클리어 메세지
+        function drawClear() {
+            if (!gameClear) return;
+
+            ctx.fillStyle = "white";
+            ctx.fillRect(70, 130, 500, 180);
+            ctx.strokStyle = "black";
+            ctx.strokeRect(70, 130, 500, 180);
+
+            ctx.textAlign = "center";
+            ctx.fillStyle = "black";
+            ctx.font = "32px Arial";
+            ctx.fillText("게임 클리어!", 320, 200);
+            ctx.font = "20px Arial";
+            ctx.fillText("보석 3개 수집 성공!", 320, 245);
+            ctx.fillText("R 키 : 다시 시작", 320, 280);
+            ctx.textAlign = "left";
+        }
+
+        //게임작동
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            movePlayer();
+            updateMonsters();
+
+            drawMap();
+            drawGems();
+
+            drawMonsters();
+            drawEffects();
+
+            drawPlayer();
+            drawAttack();
+
+            checkGems();
+
+            drawInfo();
+            drawDialog();
+            drawNPC();
+
+            drawClear();
+            drawGameOver();
+
+            requestAnimationFrame(gameLoop);
+        }
+        createMonsters();
+        gameLoop();
+    </script>
+</body>
+
+</html>
