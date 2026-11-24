@@ -1,0 +1,509 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>총 줄게 살아</title> 
+
+    <style> 
+        body { 
+            text-align: center; 
+            font-family: Arial; 
+        }
+
+        canvas {
+            border: 2px solid black; 
+            background: #111; 
+        }
+
+        button, select {
+            padding: 8px; 
+            font-size: 16px; 
+            margin: 5px;
+        }
+    </style> 
+</head> 
+
+<body> 
+
+    <h1>총 줄게 살아</h1> 
+
+    <p>점수: <span id="score">0</span> | 생명: <span id="life">3</span></p> 
+
+    <p>조작: ← / → 이동, Space 발사</p> 
+
+    <p> 
+        난이도: 
+        <select id="difficulty"> <!-- 난이도 선택 메뉴 생성 -->
+            <option value="0.5">하</option> <!-- 쉬움 난이도 설정 -->
+            <option value="0.7" selected>중</option> <!-- 보통 난이도를 기본값으로 설정 -->
+            <option value="0.9">상</option> <!-- 어려움 난이도 설정 -->
+        </select> 
+    </p> 
+
+    <p> 
+        무기 선택: 
+        <select id="weaponSelect"> <!-- 무기 선택 메뉴 생성 -->
+            <option value="normal">기본 레이저</option> <!-- 기본 무기 선택 -->
+            <option value="shotgun">샷건형</option> <!-- 샷건 무기 선택 -->
+            <option value="sun">태양섬광</option> <!-- 태양의 힘을 사용하는 특수 무기 선택 -->
+        </select>
+    </p> 
+
+    <button onclick="restartGame()">게임 재시작</button> <!-- 버튼을 누르면 게임 재시작 함수 실행 -->
+
+    <br> 
+
+    <canvas id="gameCanvas" width="600" height="400"></canvas> 
+
+    <script> 
+
+        // ==================== 기본 게임 설정 ====================
+
+        const canvas = document.getElementById("gameCanvas"); 
+        const ctx = canvas.getContext("2d"); 
+
+        const scoreText = document.getElementById("score"); 
+        const lifeText = document.getElementById("life"); 
+        const difficultySelect = document.getElementById("difficulty"); 
+        const weaponSelect = document.getElementById("weaponSelect"); 
+
+        let score = 0; 
+        let life = 3; 
+        let gameOver = false; 
+        let difficulty = 0.7; 
+        let weaponType = "normal"; 
+        let animationId; 
+        let lastShotTime = 0; 
+        let sunEffectTime = 0; 
+
+        // ==================== 플레이어 설정 ====================
+
+        const player = { 
+            x: 280, 
+            y: 340, 
+            width: 40, 
+            height: 40, 
+            speed: 6 
+        }; 
+
+        function drawPlayer() {// 플레이어를 화면에 그림
+            ctx.fillStyle = "deepskyblue"; 
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = "white"; 
+            ctx.fillRect(player.x + 15, player.y - 10, 10, 10); 
+        } 
+
+        // ==================== 키보드 설정 ====================
+
+        const keys = {}; 
+
+        document.addEventListener("keydown", function(event) { 
+            keys[event.code] = true; 
+
+            if (event.code === "Space") { 
+                event.preventDefault(); 
+                shootBullet(); 
+            }
+        }); 
+
+        document.addEventListener("keyup", function(event) { 
+            keys[event.code] = false; 
+        });
+
+        // ==================== 플레이어 이동 ====================
+
+        function movePlayer() {  // 플레이어 이동 처리
+
+            if (keys["ArrowLeft"]) { 
+                player.x -= player.speed; 
+            }
+
+            if (keys["ArrowRight"]) { 
+                player.x += player.speed; 
+            }
+
+            if (player.x < 0) { 
+                player.x = 0; 
+            }
+
+            if (player.x + player.width > canvas.width) { 
+                player.x = canvas.width - player.width; 
+            }
+        } 
+
+        // ==================== 총알 설정 ====================
+
+        const bullets = []; 
+
+        function shootBullet() { // 무기에 따라 총알 발사 설정
+
+            if (gameOver) return; 
+
+            let currentTime = Date.now(); 
+            let cooldown = 0; // 기본 무기의 쿨타임을 0으로 설정
+
+            if (weaponType === "shotgun") { 
+                cooldown = 500; // 샷건의 쿨타임을 0.5초로 설정
+            }
+
+            else if (weaponType === "sun") { 
+                cooldown = 1000; // 태양섬광의 쿨타임을 1초로 설정
+            }
+
+            if (currentTime - lastShotTime < cooldown) return; // 쿨타임이 지나지 않았다면 발사하지 않고 종료
+
+            lastShotTime = currentTime; // 마지막 발사 시간을 현재 시간으로 변경
+
+            let centerX = player.x + player.width / 2; 
+
+            if (weaponType === "normal") { 
+
+                bullets.push({
+                    x: centerX - 3, 
+                    y: player.y, 
+                    width: 6, 
+                    height: 12, 
+                    speed: 7, 
+                    dx: 0, 
+                    color: "yellow" 
+                }); 
+            }
+
+            else if (weaponType === "shotgun") {
+
+                for (let i = -2; i <= 2; i++) { // -2부터 2까지 반복하여 총알 5개 생성
+
+                    bullets.push({ 
+                        x: centerX - 3, 
+                        y: player.y, 
+                        width: 6, 
+                        height: 12, 
+                        speed: 7, 
+                        dx: i * 1.5, // 총알마다 좌우 이동 방향과 속도를 다르게 설정
+                        color: "orange" 
+                    }); 
+                }
+            }
+
+            else if (weaponType === "sun") { 
+
+                let defeatedCount = enemies.length; // 현재 존재하는 적의 수를 저장
+
+                score += defeatedCount; 
+                scoreText.textContent = score; 
+
+                enemies.length = 0; 
+
+                sunEffectTime = currentTime;
+            }
+        } 
+
+        function drawBullets() { // 총알을 화면에 그림
+
+            for (let bullet of bullets) { 
+                ctx.fillStyle = bullet.color; 
+                ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height); 
+            }
+        }
+
+        function moveBullets() { // 총알 이동 처리
+
+            for (let bullet of bullets) { 
+                bullet.y -= bullet.speed; 
+                bullet.x += bullet.dx; 
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) { 
+
+                if (bullets[i].y + bullets[i].height < 0) {
+                    bullets.splice(i, 1); 
+                }
+            }
+        } 
+
+        // ==================== 적 설정 ====================
+
+        const enemies = []; 
+
+        function createEnemy() { // 새로운 적을 생성
+
+            if (gameOver) return; 
+
+            enemies.push({ 
+                x: Math.random() * (canvas.width - 40), 
+                y: -40, 
+                width: 40, 
+                height: 40, 
+                speed: (Math.random() * 0.8 + 1.2) * difficulty 
+            }); 
+        } 
+
+        function drawEnemies() { // 적을 화면에 그림
+
+            ctx.fillStyle = "crimson";
+
+            for (let enemy of enemies) { 
+                ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height); // 
+            }
+        } 
+
+        function moveEnemies() { // 적 이동 처리
+            for (let enemy of enemies) { 
+                enemy.y += enemy.speed; 
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1); 
+
+                    life--; 
+                    lifeText.textContent = life; 
+
+                    if (life <= 0) { 
+                        endGame(); 
+                    }
+                }
+            }
+        } 
+
+        // ==================== 총알과 적의 충돌 확인 ====================
+
+        function checkBulletEnemyCollision() {  // 총알과 적의 충돌 확인
+
+            for (let i = enemies.length - 1; i >= 0; i--) { 
+
+                const enemy = enemies[i]; 
+
+                for (let j = bullets.length - 1; j >= 0; j--) { 
+
+                    const bullet = bullets[j]; 
+
+                    if ( 
+                        bullet.x < enemy.x + enemy.width && 
+                        bullet.x + bullet.width > enemy.x && 
+                        bullet.y < enemy.y + enemy.height && 
+                        bullet.y + bullet.height > enemy.y 
+                    ) {
+                        enemies.splice(i, 1); 
+                        bullets.splice(j, 1); 
+
+                        score++; 
+                        scoreText.textContent = score; 
+
+                        break; 
+                    }
+                }
+            }
+        }
+
+        // ==================== 플레이어와 적의 충돌 확인 ====================
+
+        function checkPlayerEnemyCollision() { // 플레이어와 적의 충돌 확인
+
+            for (let i = enemies.length - 1; i >= 0; i--) { 
+
+                const enemy = enemies[i]; 
+
+                if ( 
+                    player.x < enemy.x + enemy.width && 
+                    player.x + player.width > enemy.x && 
+                    player.y < enemy.y + enemy.height && 
+                    player.y + player.height > enemy.y 
+                ) {
+                    enemies.splice(i, 1); 
+
+                    life--; 
+                    lifeText.textContent = life; 
+
+                    if (life <= 0) { 
+                        endGame(); 
+                    }
+                }
+            }
+        } 
+
+        // ==================== 회복 아이템 설정 ====================
+
+        const healItems = []; 
+
+        function createHealItem() {// 새로운 회복 아이템을 생성
+
+            if (gameOver) return; 
+
+            healItems.push({ 
+                x: Math.random() * (canvas.width - 25), 
+                y: -25,
+                width: 25, 
+                height: 25, 
+                speed: 1.5 
+            }); 
+        } 
+
+        function drawHealItems() {  // 회복 아이템을 화면에 그림
+
+            ctx.fillStyle = "lime"; 
+
+            for (let item of healItems) { 
+                ctx.fillRect(item.x, item.y, item.width, item.height); 
+            }
+
+            ctx.fillStyle = "white"; 
+
+            for (let item of healItems) { 
+                ctx.fillRect(item.x + 10, item.y + 4, 5, 17);
+                ctx.fillRect(item.x + 4, item.y + 10, 17, 5); 
+            }
+        } 
+
+        function moveHealItems() { // 회복 아이템 이동 처리
+
+            for (let item of healItems) {
+                item.y += item.speed; 
+            }
+
+            for (let i = healItems.length - 1; i >= 0; i--) { 
+
+                if (healItems[i].y > canvas.height) { 
+                    healItems.splice(i, 1); 
+                }
+            }
+        } 
+
+        function checkHealCollision() {// 플레이어와 회복 아이템의 충돌 확인
+
+            for (let i = healItems.length - 1; i >= 0; i--) { 
+
+                const item = healItems[i]; 
+
+                if ( 
+                    player.x < item.x + item.width && 
+                    player.x + player.width > item.x && 
+                    player.y < item.y + item.height && 
+                    player.y + player.height > item.y 
+                ) {
+                    healItems.splice(i, 1); 
+
+                    if (life < 5) { 
+                        life++; 
+                        lifeText.textContent = life; 
+                    }
+                }
+            }
+        } 
+
+        // ==================== 태양섬광 효과 ====================
+
+        function drawSunEffect() { // 태양섬광 발사 후 화면에 특수 효과
+
+            if (sunEffectTime > 0 && Date.now() - sunEffectTime < 250) { 
+
+                ctx.fillStyle = "rgba(255, 200, 0, 0.35)"; 
+                ctx.fillRect(0, 0, canvas.width, canvas.height); 
+
+                ctx.fillStyle = "white"; 
+                ctx.font = "bold 28px Arial"; 
+                ctx.textAlign = "center"; 
+                ctx.fillText("SOLAR BURST!", canvas.width / 2, canvas.height / 2); 
+            }
+        } 
+
+        // ==================== 게임 오버 설정 ====================
+
+        function endGame() { // 게임이 끝났을 때 실행
+
+            if (gameOver) return; 
+
+            gameOver = true; 
+
+            ctx.fillStyle = "rgba(0, 0, 0, 0.7)"; 
+            ctx.fillRect(0, 0, canvas.width, canvas.height); 
+
+            ctx.font = "32px Arial"; 
+            ctx.fillStyle = "white"; 
+            ctx.textAlign = "center"; 
+
+            ctx.fillText("게임 오버!", canvas.width / 2, canvas.height / 2 - 20); 
+            ctx.fillText("최종 점수 :" + score, canvas.width / 2, canvas.height / 2 + 30); 
+        } 
+
+        // ==================== 난이도와 무기 변경 ====================
+
+        difficultySelect.addEventListener("change", function() { // 난이도 선택 메뉴가 변경되면 실행
+
+            difficulty = Number(difficultySelect.value); // 선택한 난이도 값을 숫자로 변환하여 저장
+        });
+
+        weaponSelect.addEventListener("change", function() { 
+
+            weaponType = weaponSelect.value;
+        }); 
+
+        // ==================== 게임 재시작 ====================
+
+        function restartGame() { // 재시작 버튼
+
+            cancelAnimationFrame(animationId); // 이전에 예약된 게임 화면 실행을 취소하여 중복 실행 방지
+
+            score = 0; 
+            life = 3; 
+            gameOver = false; 
+            lastShotTime = 0; 
+            sunEffectTime = 0; 
+
+            bullets.length = 0; 
+            enemies.length = 0; 
+            healItems.length = 0; 
+
+            player.x = 280; 
+            player.y = 340; 
+
+            scoreText.textContent = score;
+            lifeText.textContent = life; 
+
+            difficulty = Number(difficultySelect.value);
+            weaponType = weaponSelect.value; 
+
+            gameLoop(); 
+        } 
+
+        // ==================== 게임 실행 ====================
+
+        function gameLoop() { // 게임의 모든 기능을 반복 실행
+
+            if (gameOver) return; 
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            movePlayer(); // 플레이어 이동 처리
+            moveBullets(); // 총알 이동 처리
+            moveEnemies(); // 적 이동 처리
+            moveHealItems(); // 회복 아이템 이동 처리
+
+            drawPlayer(); // 플레이어를 화면에 그림
+            drawBullets(); // 총알을 화면에 그림
+            drawEnemies(); // 적을 화면에 그림
+            drawHealItems(); // 회복 아이템을 화면에 그림
+            drawSunEffect(); // 태양섬광의 황금빛 화면 효과 표시
+
+            checkBulletEnemyCollision(); // 총알과 적의 충돌 확인
+            checkPlayerEnemyCollision(); // 플레이어와 적의 충돌 확인
+            checkHealCollision(); // 플레이어와 회복 아이템의 충돌 확인
+
+            animationId = requestAnimationFrame(gameLoop); 
+        } 
+
+        // ==================== 자동 생성 설정 ====================
+
+        setInterval(createEnemy, 700); // 0.7초마다 새로운 적 생성
+        setInterval(createHealItem, 8000); // 8초마다 새로운 회복 아이템 생성
+
+        gameLoop(); // 모든 설정이 끝났으므로 게임 시작
+
+    </script> 
+
+</body> 
+
+</html> 
